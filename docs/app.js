@@ -10,7 +10,7 @@
  const sourceRecords=await KG42.get('source-record-index');
  const nodes=new Map(g.nodes.map(n=>[n.id,n])),papers=new Map(g.papers.map(p=>[p.id,p]));
  const edges=new Map(g.edges.map(e=>[e.id,e]));
- let selected=null,selectedEdge=null,slice=null,projection=null,shownNodes=[],shownEdges=[],positions={},dimensions={width:1000,height:700},epoch=0,scalePercent=100;
+ let selected=null,selectedEdge=null,focusedNode=null,slice=null,projection=null,shownNodes=[],shownEdges=[],positions={},dimensions={width:1000,height:700},epoch=0,scalePercent=100;
  const name=id=>nodes.get(id)?.label||id,code=id=>nodes.get(id)?.display_code||id;
  const rec=(kind,id)=>KG42.get(g.record_keys[kind][id]);
  const viewType=()=>$('view').value==='global'?'global':$('slice-kind').value;
@@ -37,6 +37,13 @@
   $('slice').innerHTML=list.map(c=>`<option value="${esc(c.id)}">${esc(papers.get(c.paper).number+' · '+c.id.split('::').pop()+' · '+c.title+(c.status==='original_singleton'?' [single-node rule]':''))}</option>`).join('');
   if(list.some(c=>c.id===old))$('slice').value=old;
  }
+ function updateProjection(){
+  const base=KG42View.project(g,slice,{paper:$('paper').value,family:$('template').value,query:$('search').value});
+  if(slice||!base.highlighted_node_ids.includes(focusedNode))focusedNode=null;
+  projection=focusedNode?KG42View.focus(base,focusedNode):base;
+  shownNodes=projection.nodes;shownEdges=projection.edges;
+  $('summary').textContent=slice||$('template').value!=='all'?`${projection.highlighted_node_ids.length} nodes · ${projection.highlighted_edge_ids.length} edges`:'338 nodes · 477 edges';
+ }
  async function refresh(inspect=true){
   const token=++epoch;updateSliceOptions();const view=viewType(),selectedSlice=$('slice').value;
   slice=null;
@@ -44,12 +51,10 @@
    const item=(view==='chain'?g.chains:g.clusters).find(c=>c.id===selectedSlice);
    const loaded=await KG42.get(item.key);if(token!==epoch)return;slice=loaded;
   }
-  projection=KG42View.project(g,slice,{paper:$('paper').value,family:$('template').value,query:$('search').value});
-  shownNodes=projection.nodes;shownEdges=projection.edges;
+  updateProjection();
   const lostInspection=(selected&&!projection.highlighted_node_ids.includes(selected))||(selectedEdge&&!projection.highlighted_edge_ids.includes(selectedEdge));
   if(selected&&!projection.highlighted_node_ids.includes(selected))selected=null;
   if(selectedEdge&&!projection.highlighted_edge_ids.includes(selectedEdge))selectedEdge=null;
-  $('summary').textContent=slice||$('template').value!=='all'?`${projection.highlighted_node_ids.length} nodes · ${projection.highlighted_edge_ids.length} edges`:'338 nodes · 477 edges';
   $('graph-title').textContent=slice?(view==='chain'?'Rule-Chain':'Rule-Cluster')+' · '+slice.id.split('::').pop():($('template').value==='all'?'Rule graph':g.families.find(f=>f.id===$('template').value)?.english_name);
   layout();draw();inspectOptions(selected?'node':selectedEdge?'edge':null,selected||selectedEdge||'');if(inspect){if(slice)await showSlice(slice,view);else showGuide();}else if(lostInspection)showGuide();
  }
@@ -88,7 +93,7 @@
   });
   for(const n of [...shownNodes].sort((a,b)=>Number(a.highlighted)-Number(b.highlighted))){
    const p=positions[n.id],l=g.layers.find(l=>l.id===n.layer),base=n.highlighted?l.color:'#c7cdd1',paint=n.highlighted?g.layers.findIndex(x=>x.id===n.layer):g.layers.length;
-   svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><ellipse class="cube-shadow" cx="4" cy="31" rx="25" ry="5" fill="#1b3647" opacity="${n.highlighted?.14:.05}"/><g class="cube-body"><path class="cube-top" d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="url(#cube-${paint}-top)"/><path class="cube-left" d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="url(#cube-${paint}-left)"/><path class="cube-right" d="M0,4 L24,-9 L24,15 L0,28Z" fill="url(#cube-${paint}-right)"/><path class="cube-outline" d="M0,-22 L24,-9 V15 L0,28 L-24,15 V-9Z" fill="none" stroke="${shade(base,-.35)}" stroke-width=".8" stroke-linejoin="round"/><path d="M-24,-9 L0,4 L24,-9 M0,4 V28" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width=".85"/><path d="M-19,-9 L0,-19 L18,-9" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width=".7"/></g><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
+   svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id||focusedNode===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><ellipse class="cube-shadow" cx="4" cy="31" rx="25" ry="5" fill="#1b3647" opacity="${n.highlighted?.14:.05}"/><g class="cube-body"><path class="cube-top" d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="url(#cube-${paint}-top)"/><path class="cube-left" d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="url(#cube-${paint}-left)"/><path class="cube-right" d="M0,4 L24,-9 L24,15 L0,28Z" fill="url(#cube-${paint}-right)"/><path class="cube-outline" d="M0,-22 L24,-9 V15 L0,28 L-24,15 V-9Z" fill="none" stroke="${shade(base,-.35)}" stroke-width=".8" stroke-linejoin="round"/><path d="M-24,-9 L0,4 L24,-9 M0,4 V28" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width=".85"/><path d="M-19,-9 L0,-19 L18,-9" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width=".7"/></g><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
   }
   $('canvas').setAttribute('viewBox',`0 0 ${W} ${H}`);$('canvas').innerHTML=svg;renderScale();stage.scrollLeft=viewport.left;stage.scrollTop=viewport.top;
   for(const el of $('canvas').querySelectorAll('[data-template]')){el.onclick=()=>selectTemplate(el.dataset.template).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
@@ -97,7 +102,7 @@
  }
  async function selectTemplate(id){
   if(viewType()!=='global'||!g.families.some(f=>f.id===id))return;
-  $('template').value=id;selected=null;selectedEdge=null;
+  $('template').value=id;selected=null;selectedEdge=null;focusedNode=null;
   await refresh();updateHash();
  }
  function renderScale(){
@@ -123,7 +128,7 @@
   $('inspect-entry').value=kind&&id?kind+':'+id:'';
   $('quick-inspect').hidden=!nodeOptions&&!edgeOptions;
  }
- function updateHash(kind,id){const h=new URLSearchParams();if(slice)h.set(viewType(),slice.id);else if($('template').value!=='all')h.set('template',$('template').value);if(kind&&id)h.set(kind,id);history.replaceState(null,'','#'+h.toString());}
+ function updateHash(kind,id){const h=new URLSearchParams();if(slice)h.set(viewType(),slice.id);else if($('template').value!=='all')h.set('template',$('template').value);if(focusedNode)h.set('focus',focusedNode);if(kind&&id)h.set(kind,id);history.replaceState(null,'','#'+h.toString());}
  function evidence(paper,entries){
   return (entries||[]).map(e=>{const refs=sourceRecords.evidence[paper]?.[e.evidence_id];return `<details><summary>${esc(e.evidence_id||'Source excerpt')}</summary><blockquote>${esc(e.source_text||e.quote||'')}</blockquote>${raw('Location',e.location||{})}${refs?refs.pointers.map(p=>`<p class="source-pointer">${esc(refs.document.split('/').pop())} · ${esc(p)}</p>`).join(''):''}</details>`;}).join('');
  }
@@ -134,7 +139,7 @@
   const f=await rec('functional_groups',id);show(tag('Functional group')+tag(f.code)+tag(f.layer)+`<h2>Existing functional children</h2><p>${esc(f.definition)}</p><p>This group provides context for the current nodes below. It adds no node or relation to the global graph.</p>`+links(f.child_ids));
  }
  async function showNode(id){
-  if(!projection.highlighted_node_ids.includes(id))return;selected=id;selectedEdge=null;draw();inspectOptions('node',id);const n=await rec('nodes',id),brief=nodes.get(id);updateHash('node',id);
+  if(!projection.highlighted_node_ids.includes(id))return;selected=id;selectedEdge=null;if(viewType()==='global'){focusedNode=id;$('search').value='';updateProjection();}draw();inspectOptions('node',id);const n=await rec('nodes',id),brief=nodes.get(id);updateHash('node',id);
   let html=tag(brief.display_code)+tag(brief.code)+tag(n.layer)+tag(brief.template_code)+`<h2>${esc(brief.label)}</h2><p>${esc(n.definition)}</p>`;
   html+=fields({'Stable node ID':id,'Source occurrences':n.members.length,'Source papers':n.paper_ids.length});
   const incident=projection.edges.filter(e=>e.highlighted&&(e.source===id||e.target===id));
@@ -220,12 +225,12 @@
  $('template').innerHTML='<option value="all">Select a template…</option>'+g.families.map(f=>`<option value="${esc(f.id)}">${esc(f.display_code+' · '+f.english_name)}</option>`).join('');
  $('paper').innerHTML='<option value="all">All 50 papers</option>'+g.papers.map(p=>`<option value="${esc(p.id)}">${esc(p.number+' · '+p.title)}</option>`).join('');
  for(const id of ['slice-kind','paper','slice'])$(id).onchange=()=>refresh().catch(error);
- $('template').onchange=()=>{selected=null;selectedEdge=null;refresh().then(()=>updateHash()).catch(error);};
+ $('template').onchange=()=>{selected=null;selectedEdge=null;focusedNode=null;refresh().then(()=>updateHash()).catch(error);};
  $('view').onchange=()=>{
-  $('paper').value='all';$('template').value='all';$('search').value='';selected=null;selectedEdge=null;$('quick-inspect').open=false;
+  $('paper').value='all';$('template').value='all';$('search').value='';selected=null;selectedEdge=null;focusedNode=null;$('quick-inspect').open=false;
   history.replaceState(null,'',location.pathname);refresh().catch(error);
  };
- $('search').oninput=()=>refresh(false).catch(error);$('zoom').oninput=()=>setScale($('zoom').value);$('fit').onclick=fit;
+ $('search').oninput=()=>{focusedNode=null;refresh(false).catch(error);};$('zoom').oninput=()=>setScale($('zoom').value);$('fit').onclick=fit;
  $('inspect-entry').onchange=()=>{
   const value=$('inspect-entry').value,separator=value.indexOf(':');if(separator<0)return;
   const kind=value.slice(0,separator),id=value.slice(separator+1);$('quick-inspect').open=false;
@@ -236,6 +241,7 @@
  await refresh();
  if(hash.has('chain'))await openSlice('chain',hash.get('chain'));
  else if(hash.has('cluster'))await openSlice('cluster',hash.get('cluster'));
+ if(!slice&&hash.has('focus')&&projection.highlighted_node_ids.includes(hash.get('focus'))){focusedNode=hash.get('focus');updateProjection();draw();inspectOptions();}
  if(hash.has('node')&&nodes.has(hash.get('node')))await showNode(hash.get('node'));
  else if(hash.has('edge')&&edges.has(hash.get('edge')))await showEdge(hash.get('edge'));
 })().catch(e=>{document.getElementById('detail').textContent='Unable to load DEM-KG: '+e.message;console.error(e);});
