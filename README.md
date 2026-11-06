@@ -1,9 +1,9 @@
-# KG4.2 Rule Knowledge Graph
+# DEM-KG
 
-Interactive rule graph and Rule-Chain / Rule-Cluster slices. Select a market template before inspecting its nodes and edges.
+[Open DEM-KG](https://faisal-1921.github.io/DEM-KG/)
 
-The website has no download controls or standalone Sources browser. It retains inline definitions, mathematics, conditions and citations. Complete graph exports, A/B/C/D source documents, translation maps and private audit records are excluded.
+A rule knowledge graph with 338 current nodes, 477 S bundles, 525 visible rule slices and 201 clusters. Scientific definitions, mathematics, conditions and citations are accessible inline.
 
-This is a static website. Content displayed in a browser can still be saved; removal of export controls is not copy protection.
+The graph opens at 100% scale. Select a market template to highlight its nodes and internal edges; template and detail selection preserve the current scale and position. Fit view is available as an explicit action. Rule-Chain and Rule-Cluster slices keep the full gray graph as noninteractive context.
 
-Scientific content: 338 current nodes, 477 S bundles, 500 active source assertions, 525 visible rule slices and 201 clusters.
+No download controls or standalone Sources browser. Original Source documents, complete graph exports, translation maps and private audit records are excluded. Web code and browser-visible content remain copyable.

@@ -10,7 +10,7 @@
  const sourceRecords=await KG42.get('source-record-index');
  const nodes=new Map(g.nodes.map(n=>[n.id,n])),papers=new Map(g.papers.map(p=>[p.id,p]));
  const edges=new Map(g.edges.map(e=>[e.id,e]));
- let selected=null,selectedEdge=null,slice=null,projection=null,shownNodes=[],shownEdges=[],positions={},dimensions={width:1000,height:700},epoch=0;
+ let selected=null,selectedEdge=null,slice=null,projection=null,shownNodes=[],shownEdges=[],positions={},dimensions={width:1000,height:700},epoch=0,scalePercent=100;
  const name=id=>nodes.get(id)?.label||id,code=id=>nodes.get(id)?.display_code||id;
  const rec=(kind,id)=>KG42.get(g.record_keys[kind][id]);
  const viewType=()=>$('view').value==='global'?'global':$('slice-kind').value;
@@ -51,10 +51,11 @@
   if(selectedEdge&&!projection.highlighted_edge_ids.includes(selectedEdge))selectedEdge=null;
   $('summary').textContent=slice||$('template').value!=='all'?`${projection.highlighted_node_ids.length} nodes · ${projection.highlighted_edge_ids.length} edges`:'338 nodes · 477 edges';
   $('graph-title').textContent=slice?(view==='chain'?'Rule-Chain':'Rule-Cluster')+' · '+slice.id.split('::').pop():($('template').value==='all'?'Rule graph':g.families.find(f=>f.id===$('template').value)?.english_name);
-  layout();draw();inspectOptions(selected?'node':selectedEdge?'edge':null,selected||selectedEdge||'');fit();if(inspect){if(slice)await showSlice(slice,view);else showGuide();}else if(lostInspection)showGuide();
+  layout();draw();inspectOptions(selected?'node':selectedEdge?'edge':null,selected||selectedEdge||'');if(inspect){if(slice)await showSlice(slice,view);else showGuide();}else if(lostInspection)showGuide();
  }
  function layout(){positions=g.layout.positions;dimensions={width:g.layout.width,height:g.layout.height};}
  function draw(){
+  const stage=$('stage'),viewport={left:stage.scrollLeft,top:stage.scrollTop};
   const W=dimensions.width,H=dimensions.height;
   let svg='<defs><marker id="arrow-active" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#267a91"/></marker><marker id="arrow-context" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#b2bac0"/></marker><marker id="arrow-selected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ad571e"/></marker></defs>';
   for(const p of g.layout.planes){svg+=`<g><path class="plane" d="M35,${p.y} L${W-85},${p.y} L${W-35},${p.y+p.height} L85,${p.y+p.height}Z"/><text x="40" y="${p.y+24}" class="layer-label" fill="${esc(p.color)}">${esc(p.number+' '+p.code)}</text></g>`;}
@@ -78,7 +79,7 @@
    const p=positions[n.id],l=g.layers.find(l=>l.id===n.layer),base=n.highlighted?l.color:'#c7cdd1';
    svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><path d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="${base}" stroke="#fff" stroke-opacity=".7"/><path d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="${base}"/><path d="M0,4 L24,-9 L24,15 L0,28Z" fill="${base}" style="filter:brightness(.8)"/><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
   }
-  $('canvas').setAttribute('viewBox',`0 0 ${W} ${H}`);$('canvas').innerHTML=svg;zoom();
+  $('canvas').setAttribute('viewBox',`0 0 ${W} ${H}`);$('canvas').innerHTML=svg;renderScale();stage.scrollLeft=viewport.left;stage.scrollTop=viewport.top;
   for(const el of $('canvas').querySelectorAll('[data-template]')){el.onclick=()=>selectTemplate(el.dataset.template).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
   for(const el of $('canvas').querySelectorAll('[data-node]')){el.onclick=()=>showNode(el.dataset.node).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
   for(const el of $('canvas').querySelectorAll('[data-edge]')){el.onclick=()=>showEdge(el.dataset.edge).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
@@ -88,8 +89,22 @@
   $('template').value=id;selected=null;selectedEdge=null;
   await refresh();updateHash();
  }
- function zoom(){const scale=Number($('zoom').value)/100;$('canvas').style.width=dimensions.width*scale+'px';$('canvas').style.height=dimensions.height*scale+'px';}
- function fit(){const stage=$('stage'),s=Math.min((stage.clientWidth-25)/dimensions.width,(stage.clientHeight-25)/dimensions.height,1);$('zoom').value=Math.max(10,Math.floor(s*100/5)*5);zoom();stage.scrollTop=0;stage.scrollLeft=0;}
+ function renderScale(){
+  const scale=scalePercent/100;
+  $('canvas').style.width=dimensions.width*scale+'px';$('canvas').style.height=dimensions.height*scale+'px';
+  $('zoom').value=String(scalePercent);$('zoom').setAttribute('aria-valuetext',scalePercent+'%');
+  $('zoom-percent').textContent=scalePercent+'%';
+ }
+ function setScale(value,keepCenter=true){
+  const stage=$('stage'),previous=scalePercent/100;
+  const x=(stage.scrollLeft+stage.clientWidth/2)/previous,y=(stage.scrollTop+stage.clientHeight/2)/previous;
+  scalePercent=Math.max(5,Math.min(200,Math.round(Number(value)||100)));renderScale();
+  if(keepCenter){stage.scrollLeft=Math.max(0,x*scalePercent/100-stage.clientWidth/2);stage.scrollTop=Math.max(0,y*scalePercent/100-stage.clientHeight/2);}
+ }
+ function fit(){
+  const stage=$('stage'),scale=Math.min((stage.clientWidth-25)/dimensions.width,(stage.clientHeight-25)/dimensions.height,1);
+  setScale(Math.floor(scale*100),false);stage.scrollTop=0;stage.scrollLeft=0;
+ }
  function inspectOptions(kind=null,id=''){
   const nodeOptions=projection.nodes.filter(n=>n.highlighted).map(n=>`<option value="node:${esc(n.id)}">${esc(n.display_code+' · '+n.label)}</option>`).join('');
   const edgeOptions=projection.edges.filter(e=>e.highlighted).map(e=>`<option value="edge:${esc(e.id)}">${esc(code(e.source)+' → '+code(e.target))}</option>`).join('');
@@ -199,7 +214,7 @@
   $('paper').value='all';$('template').value='all';$('search').value='';selected=null;selectedEdge=null;$('quick-inspect').open=false;
   history.replaceState(null,'',location.pathname);refresh().catch(error);
  };
- $('search').oninput=()=>refresh(false).catch(error);$('zoom').oninput=zoom;$('fit').onclick=fit;
+ $('search').oninput=()=>refresh(false).catch(error);$('zoom').oninput=()=>setScale($('zoom').value);$('fit').onclick=fit;
  $('inspect-entry').onchange=()=>{
   const value=$('inspect-entry').value,separator=value.indexOf(':');if(separator<0)return;
   const kind=value.slice(0,separator),id=value.slice(separator+1);$('quick-inspect').open=false;
@@ -212,4 +227,4 @@
  else if(hash.has('cluster'))await openSlice('cluster',hash.get('cluster'));
  if(hash.has('node')&&nodes.has(hash.get('node')))await showNode(hash.get('node'));
  else if(hash.has('edge')&&edges.has(hash.get('edge')))await showEdge(hash.get('edge'));
-})().catch(e=>{document.getElementById('detail').textContent='Unable to load KG4.2: '+e.message;console.error(e);});
+})().catch(e=>{document.getElementById('detail').textContent='Unable to load DEM-KG: '+e.message;console.error(e);});
