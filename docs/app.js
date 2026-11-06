@@ -54,10 +54,21 @@
   layout();draw();inspectOptions(selected?'node':selectedEdge?'edge':null,selected||selectedEdge||'');if(inspect){if(slice)await showSlice(slice,view);else showGuide();}else if(lostInspection)showGuide();
  }
  function layout(){positions=g.layout.positions;dimensions={width:g.layout.width,height:g.layout.height};}
+ // Shared face gradients keep the registered layer hue while adding directional light.
+ function shade(hex,amount){
+  const raw=hex.slice(1),h=raw.length===3?raw.split('').map(c=>c+c).join(''):raw,n=parseInt(h,16),target=amount>=0?255:0,a=Math.abs(amount);
+  return '#'+[16,8,0].map(shift=>Math.round(((n>>shift)&255)*(1-a)+target*a).toString(16).padStart(2,'0')).join('');
+ }
+ function cubePaints(){
+  return [...g.layers.map(l=>l.color),'#c7cdd1'].map((color,i)=>[
+   ['top',.68,.24],['left',.15,-.12],['right',-.19,-.43]
+  ].map(([face,light,dark])=>`<linearGradient id="cube-${i}-${face}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${shade(color,light)}"/><stop offset="100%" stop-color="${shade(color,dark)}"/></linearGradient>`).join('')).join('');
+ }
  function draw(){
   const stage=$('stage'),viewport={left:stage.scrollLeft,top:stage.scrollTop};
   const W=dimensions.width,H=dimensions.height;
   let svg='<defs><marker id="arrow-active" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#267a91"/></marker><marker id="arrow-context" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#b2bac0"/></marker><marker id="arrow-selected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ad571e"/></marker></defs>';
+  svg=svg.replace('</defs>',cubePaints()+'</defs>');
   for(const p of g.layout.planes){svg+=`<g><path class="plane" d="M35,${p.y} L${W-85},${p.y} L${W-35},${p.y+p.height} L85,${p.y+p.height}Z"/><text x="40" y="${p.y+24}" class="layer-label" fill="${esc(p.color)}">${esc(p.number+' '+p.code)}</text></g>`;}
   for(const f of g.layout.groups){
    const [x,y,w,h]=f.box,ref=g.families.find(a=>a.id===f.id),canSelect=viewType()==='global',active=canSelect&&$('template').value===f.id;
@@ -76,8 +87,8 @@
    svg+=`<g class="edge ${e.highlighted?'highlighted-edge':'context-edge'} ${isSelected?'selected-edge':''}" ${e.highlighted?`data-edge="${esc(e.id)}" tabindex="0" role="button" aria-label="${esc(code(e.source)+' to '+code(e.target)+'; '+scope)}"`:'aria-hidden="true"'}><title>${esc(name(e.source)+' → '+name(e.target)+' · '+count+' source assertions · '+scope)}</title><path class="edge-line" d="${path(e.source,e.target,e.drawIndex)}" stroke="${color}" stroke-width="${isSelected||incident?2.4:e.highlighted?1.5:.8}" opacity="${isSelected?1:e.highlighted?.7:.38}" fill="none" marker-end="url(#arrow-${marker})" vector-effect="non-scaling-stroke"/>${e.highlighted?`<path class="edge-hit" d="${path(e.source,e.target,e.drawIndex)}" stroke="transparent" stroke-width="10" fill="none" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`:''}</g>`;
   });
   for(const n of [...shownNodes].sort((a,b)=>Number(a.highlighted)-Number(b.highlighted))){
-   const p=positions[n.id],l=g.layers.find(l=>l.id===n.layer),base=n.highlighted?l.color:'#c7cdd1';
-   svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><path d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="${base}" stroke="#fff" stroke-opacity=".7"/><path d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="${base}"/><path d="M0,4 L24,-9 L24,15 L0,28Z" fill="${base}" style="filter:brightness(.8)"/><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
+   const p=positions[n.id],l=g.layers.find(l=>l.id===n.layer),base=n.highlighted?l.color:'#c7cdd1',paint=n.highlighted?g.layers.findIndex(x=>x.id===n.layer):g.layers.length;
+   svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><ellipse class="cube-shadow" cx="4" cy="31" rx="25" ry="5" fill="#1b3647" opacity="${n.highlighted?.14:.05}"/><g class="cube-body"><path class="cube-top" d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="url(#cube-${paint}-top)"/><path class="cube-left" d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="url(#cube-${paint}-left)"/><path class="cube-right" d="M0,4 L24,-9 L24,15 L0,28Z" fill="url(#cube-${paint}-right)"/><path class="cube-outline" d="M0,-22 L24,-9 V15 L0,28 L-24,15 V-9Z" fill="none" stroke="${shade(base,-.35)}" stroke-width=".8" stroke-linejoin="round"/><path d="M-24,-9 L0,4 L24,-9 M0,4 V28" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width=".85"/><path d="M-19,-9 L0,-19 L18,-9" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width=".7"/></g><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
   }
   $('canvas').setAttribute('viewBox',`0 0 ${W} ${H}`);$('canvas').innerHTML=svg;renderScale();stage.scrollLeft=viewport.left;stage.scrollTop=viewport.top;
   for(const el of $('canvas').querySelectorAll('[data-template]')){el.onclick=()=>selectTemplate(el.dataset.template).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}

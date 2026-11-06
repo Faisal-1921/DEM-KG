@@ -12,3 +12,11 @@ aside{overflow:auto;scrollbar-color:#d0d9df transparent}.detail-heading{padding:
 @media(max-width:1200px){main{grid-template-columns:minmax(380px,1fr) 320px;gap:10px;padding:0 12px 12px}.controls{gap:14px;padding:12px 18px}.controls #template{max-width:245px}.controls #paper{max-width:220px}#search{width:190px}.panel-head{padding:10px 14px}.view-tools{gap:8px}.view-tools input{width:80px}.view-tools .scale-control>span{display:none}}
 @media(max-width:850px){html,body{height:auto;min-height:100%}.app-header{padding:14px 18px;min-height:70px}.controls{gap:12px;align-items:stretch}.controls label{min-width:0}.controls #search-control{flex:1}.controls #search{width:100%}.controls #view,.controls #template{max-width:100%}main{grid-template-columns:1fr}.graph-panel{height:68vh;min-height:460px}aside{max-height:none}.view-tools input{width:80px}.graph-heading h1{font-size:13px}#detail{padding:18px 20px}}
 @media(prefers-reduced-motion:reduce){button,select,input,.template-region .template-box{transition:none}}
+
+/* WEB13: dimensional cubes and compact release attribution. */
+.publication-info{flex:1;min-width:0;padding-left:22px;border-left:1px solid #e2e7eb;margin-left:8px}
+.publication-info p{margin:0;line-height:1.6}.publication-info .publisher-line{font-size:11px;color:#71818b}.publisher-line strong{font-size:11px;font-weight:600;letter-spacing:0;color:#3a5663}
+.publication-info .publication-purpose{font-size:12px;color:#314d5a;margin-top:3px;letter-spacing:.02px}.app-header .brand{flex-shrink:0}.app-header .version-label{flex-shrink:0}
+.cube-body,.cube-shadow{pointer-events:none}.context-node .cube-body{opacity:.7}.highlighted-node .cube-body{opacity:1}
+@media(max-width:1050px){.app-header{gap:15px}.publication-info{padding-left:15px;margin-left:0}.publication-info .publisher-line,.publisher-line strong{font-size:10px}.publication-info .publication-purpose{font-size:11px}}
+@media(max-width:700px){.app-header{flex-wrap:wrap;padding:14px 18px}.publication-info{order:3;flex-basis:100%;padding:10px 0 0;border-left:0;border-top:1px solid #e8edf0}.app-header .version-label{margin-left:auto}.publication-info .publisher-line,.publisher-line strong{font-size:10px}.publication-info .publication-purpose{font-size:11px}}
