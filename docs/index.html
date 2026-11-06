@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="KG4.2: a source-traceable rule knowledge graph with Rule-Chain and Rule-Cluster slices.">
+<title>KG4.2 · Rule Knowledge Graph</title>
+<link rel="stylesheet" href="legacy.css"><link rel="stylesheet" href="release.css"><link rel="stylesheet" href="clean.css"></head>
+<body><header><strong>KG4.2 <span>Rule Knowledge Graph</span></strong>
+</header>
+<section class="controls" aria-label="Graph selection">
+<label>View<select id="view"><option value="global">Rule graph</option><option value="slices">Rule-Chain / Rule-Cluster slices</option></select></label>
+<label id="template-control">Template<select id="template"><option value="all">Select a template…</option></select></label>
+<label id="search-control">Search<input id="search" type="search" placeholder="Node name or code" autocomplete="off"></label>
+<label id="slice-kind-control" hidden>Slice type<select id="slice-kind"><option value="chain">Rule-Chain</option><option value="cluster">Rule-Cluster</option></select></label>
+<label id="paper-control" hidden>Paper<select id="paper"><option value="all">All 50 papers</option></select></label>
+<label class="grow" id="slice-control" hidden>Source slice<select id="slice"></select></label>
+</section>
+<main><section class="graph-panel" aria-label="Knowledge graph">
+<div class="panel-head"><div class="graph-heading"><h1 id="graph-title">Rule graph</h1><span id="summary" role="status">Loading…</span></div>
+<div class="view-tools"><button id="fit" title="Fit the complete graph">Fit</button><label>Zoom<input id="zoom" type="range" min="10" max="180" step="5" value="50"></label></div></div>
+<div class="stage" id="stage"><svg id="canvas" role="img" aria-label="Layered rule graph"></svg></div>
+<div class="legend"><span><i class="legend-color"></i>Selected</span><span><i class="legend-gray"></i>Background</span></div>
+</section>
+<aside id="inspector" aria-label="Source and definition inspector">
+<div class="detail-heading">Details</div>
+<details id="quick-inspect" class="inspector-picker" hidden><summary>Find a node or edge</summary>
+<select id="inspect-entry" aria-label="Inspect a highlighted node or edge"></select></details>
+<div id="detail"><p>Loading…</p></div></aside></main>
+<noscript>This viewer requires JavaScript.</noscript>
+<script src="loader.js"></script><script src="data/index.js"></script><script src="context.js"></script><script src="app.js"></script>
+</body></html>
