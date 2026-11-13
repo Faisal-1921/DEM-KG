@@ -2,7 +2,7 @@
 
 [Open DEM-KG](https://faisal-1921.github.io/DEM-KG/) · [References](https://faisal-1921.github.io/DEM-KG/references.html)
 
-Published by ECE, The University of Hong Kong & EILAB, Tsinghua University. Building a unified knowledge structure for DEM market design.
+Published by EI LAB, Department of Electrical Engineering, Tsinghua University & ECE, The University of Hong Kong. Building a unified knowledge structure for DEM market design.
 
 A rule knowledge graph with 338 current nodes, 477 S bundles, 525 visible rule slices and 201 clusters. Scientific definitions, mathematics, conditions and citations are accessible inline. Node, directed-edge, rule and cluster details link to the paper title, DOI and the corresponding numbered reference. The References page lists all 50 papers with authors, publication details and original-article links.
 
