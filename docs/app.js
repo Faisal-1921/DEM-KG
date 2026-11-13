@@ -3,12 +3,14 @@
  const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const tag=(v,w=false)=>`<span class="tag ${w?'warm':''}">${esc(v)}</span>`;
  const label=k=>k.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
- const present=(v)=>v==null?'<span class=\"muted\">Not specified</span>':Array.isArray(v)?(v.length?'<ul class=\"science-list\">'+v.map(x=>'<li>'+present(x)+'</li>').join('')+'</ul>':'<span class=\"muted\">None recorded</span>'):typeof v==='object'?'<dl class=\"field-list\">'+Object.entries(v).map(([k,x])=>'<dt>'+esc(label(k))+'</dt><dd>'+present(x)+'</dd>').join('')+'</dl>':'<span class=\"field-value\">'+esc(v)+'</span>';
+ const auditKeys=new Set(['assembly_status','semantic_review_status','review_status','audit_status','validation_status','scientific_acceptance','source_audit_performed','candidate_only','candidate_delivery_mode','scope_disposition']);
+ const present=(v)=>v==null?'<span class=\"muted\">Not specified</span>':Array.isArray(v)?(v.length?'<ul class=\"science-list\">'+v.map(x=>'<li>'+present(x)+'</li>').join('')+'</ul>':'<span class=\"muted\">None recorded</span>'):typeof v==='object'?'<dl class=\"field-list\">'+Object.entries(v).filter(([k])=>!auditKeys.has(k)).map(([k,x])=>'<dt>'+esc(label(k))+'</dt><dd>'+present(x)+'</dd>').join('')+'</dl>':'<span class=\"field-value\">'+esc(v)+'</span>';
  const raw=(title,v)=>`<details><summary>${esc(title)}</summary>${present(v)}</details>`;
  const button=(kind,id,title)=>`<button data-${kind}="${esc(id)}">${esc(title)}</button>`;
  const g=await KG42.get('index');KG42.configure(g.assets);
  const sourceRecords=await KG42.get('source-record-index');
- const nodes=new Map(g.nodes.map(n=>[n.id,n])),papers=new Map(g.papers.map(p=>[p.id,p]));
+ const bibliography=await KG42.get('references');
+ const nodes=new Map(g.nodes.map(n=>[n.id,n])),papers=new Map(g.papers.map(p=>[p.id,{...p,...bibliography.papers.find(r=>r.id===p.id)}]));
  const edges=new Map(g.edges.map(e=>[e.id,e]));
  let selected=null,selectedEdge=null,focusedNode=null,slice=null,projection=null,shownNodes=[],shownEdges=[],positions={},dimensions={width:1000,height:700},epoch=0,scalePercent=100;
  const name=id=>nodes.get(id)?.label||id,code=id=>nodes.get(id)?.display_code||id;
@@ -28,7 +30,13 @@
  function links(ids,kind='node'){return '<div class="clickable-list">'+ids.map(id=>button(kind,id,kind==='node'?code(id)+' · '+name(id):id)).join('')+'</div>';}
  function fields(value){return '<dl class="field-list">'+Object.entries(value).filter(([,v])=>v!=null&&v!=='').map(([k,v])=>`<dt>${esc(k)}</dt><dd class="field-value">${(typeof v==='string'?esc(v):present(v))}</dd>`).join('')+'</dl>';}
  function provenance(pointer){return `<details><summary>Record trace</summary><p class="code">${esc(pointer)}</p><p class="source-pointer">KG4.1 SHA-256: ${esc(g.baseline_sha256)}</p></details>`;}
- function sourceRecord(section,id){const s=g.source_record_index[section][id];return `<details><summary>Source reference</summary><p>${esc(s.document.split('/').pop())}</p><p class="code">${esc(s.pointer)}</p><p class="source-pointer">Original SHA-256: ${esc(s.original_sha256)}</p></details>`;}
+ function paperReference(id){
+  const p=papers.get(id);if(!p)return '';
+  const doi=p.doi&&/^10\.\d{4,9}\/\S+$/i.test(p.doi)?p.doi:null;
+  return `<div class="paper-reference"><span class="reference-number">Paper ${esc(p.number)}</span><p class="reference-title">${esc(p.title)}</p><div class="reference-links">${doi?`<a href="https://doi.org/${esc(encodeURI(doi))}" target="_blank" rel="noopener noreferrer">DOI / Original article ↗</a>`:''}<a href="references.html#paper-${esc(p.number)}" target="_blank" rel="noopener">Reference [${esc(p.number)}] ↗</a></div>${doi?`<p class="doi-value">${esc(doi)}</p>`:''}</div>`;
+ }
+ function sourceRecord(section,id){const s=g.source_record_index[section][id];return paperReference(id.split('::')[0])+`<details><summary>Source reference</summary><p>${esc(s.document.split('/').pop())}</p><p class="code">${esc(s.pointer)}</p><p class="source-pointer">Original SHA-256: ${esc(s.original_sha256)}</p></details>`;}
+ function showLayer(id){const l=g.layers.find(x=>x.id===id);if(!l)return;show(tag(l.id)+tag(l.code)+`<h2>${esc(l.english_name)}</h2><dl class="layer-key">`+g.layers.map(x=>`<dt style="color:${esc(x.color)}">${esc(x.code)}</dt><dd>${esc(x.english_name)}</dd>`).join('')+'</dl>');}
  function updateSliceOptions(){
   const view=viewType(),paper=$('paper').value,old=$('slice').value;
   $('template-control').hidden=view!=='global';$('search-control').hidden=view!=='global';$('paper-control').hidden=view==='global';
@@ -74,7 +82,7 @@
   const W=dimensions.width,H=dimensions.height;
   let svg='<defs><marker id="arrow-active" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#267a91"/></marker><marker id="arrow-context" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#b2bac0"/></marker><marker id="arrow-selected" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ad571e"/></marker></defs>';
   svg=svg.replace('</defs>',cubePaints()+'</defs>');
-  for(const p of g.layout.planes){svg+=`<g><path class="plane" d="M35,${p.y} L${W-85},${p.y} L${W-35},${p.y+p.height} L85,${p.y+p.height}Z"/><text x="40" y="${p.y+24}" class="layer-label" fill="${esc(p.color)}">${esc(p.number+' '+p.code)}</text></g>`;}
+  for(const p of g.layout.planes){const l=g.layers.find(x=>x.code===p.code);svg+=`<g><path class="plane" d="M35,${p.y} L${W-85},${p.y} L${W-35},${p.y+p.height} L85,${p.y+p.height}Z"/><g class="layer-help" data-layer="${esc(l.id)}" tabindex="0" role="button" aria-label="${esc(p.code+' — '+l.english_name)}"><title>${esc(p.code+' — '+l.english_name)}</title><rect x="32" y="${p.y+5}" width="100" height="29" rx="5" fill="transparent"/><text x="40" y="${p.y+24}" class="layer-label" fill="${esc(p.color)}">${esc(p.number+' '+p.code)}</text></g></g>`;}
   for(const f of g.layout.groups){
    const [x,y,w,h]=f.box,ref=g.families.find(a=>a.id===f.id),canSelect=viewType()==='global',active=canSelect&&$('template').value===f.id;
    svg+=`<g class="template-region ${active?'selected-template':''}" ${canSelect?`data-template="${esc(f.id)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="Select template ${esc(ref?.english_name||f.code)}"`:''}><rect class="template-box" x="${x}" y="${y}" width="${w}" height="${h}" rx="12" fill="${esc(f.color)}" fill-opacity="${active?.10:.025}" stroke="${esc(f.color)}" stroke-opacity="${active?.9:.3}" stroke-width="${active?2:1}"/><rect x="${x}" y="40" width="${w}" height="58" fill="transparent"/><text class="template-label" x="${x+w/2}" y="67" text-anchor="middle" fill="${esc(f.color)}">${esc(ref?.display_code||f.code)}</text><text x="${x+w/2}" y="90" font-size="12" text-anchor="middle">${esc(ref?.english_name||'')}</text></g>`;
@@ -96,6 +104,7 @@
    svg+=`<g class="figure-node ${n.highlighted?'highlighted-node':'context-node'} ${selected===n.id||focusedNode===n.id?'selected':''}" transform="translate(${p.x},${p.y})" ${n.highlighted?`data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.display_code+' '+n.label)}"`:'aria-hidden="true"'}><title>${esc(n.display_code+' · '+n.code+' · '+n.label+(n.highlighted?'':' · Background only'))}</title><rect class="halo" x="-50" y="-33" width="100" height="84" rx="8"/><ellipse class="cube-shadow" cx="4" cy="31" rx="25" ry="5" fill="#1b3647" opacity="${n.highlighted?.14:.05}"/><g class="cube-body"><path class="cube-top" d="M0,-22 L24,-9 L0,4 L-24,-9Z" fill="url(#cube-${paint}-top)"/><path class="cube-left" d="M-24,-9 L0,4 L0,28 L-24,15Z" fill="url(#cube-${paint}-left)"/><path class="cube-right" d="M0,4 L24,-9 L24,15 L0,28Z" fill="url(#cube-${paint}-right)"/><path class="cube-outline" d="M0,-22 L24,-9 V15 L0,28 L-24,15 V-9Z" fill="none" stroke="${shade(base,-.35)}" stroke-width=".8" stroke-linejoin="round"/><path d="M-24,-9 L0,4 L24,-9 M0,4 V28" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width=".85"/><path d="M-19,-9 L0,-19 L18,-9" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width=".7"/></g><text y="46" text-anchor="middle" class="node-label">${esc(n.display_code)}</text></g>`;
   }
   $('canvas').setAttribute('viewBox',`0 0 ${W} ${H}`);$('canvas').innerHTML=svg;renderScale();stage.scrollLeft=viewport.left;stage.scrollTop=viewport.top;
+  for(const el of $('canvas').querySelectorAll('[data-layer]')){el.onclick=()=>showLayer(el.dataset.layer);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
   for(const el of $('canvas').querySelectorAll('[data-template]')){el.onclick=()=>selectTemplate(el.dataset.template).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
   for(const el of $('canvas').querySelectorAll('[data-node]')){el.onclick=()=>showNode(el.dataset.node).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
   for(const el of $('canvas').querySelectorAll('[data-edge]')){el.onclick=()=>showEdge(el.dataset.edge).catch(error);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};}
@@ -133,7 +142,7 @@
   return (entries||[]).map(e=>{const refs=sourceRecords.evidence[paper]?.[e.evidence_id];return `<details><summary>${esc(e.evidence_id||'Source excerpt')}</summary><blockquote>${esc(e.source_text||e.quote||'')}</blockquote>${raw('Location',e.location||{})}${refs?refs.pointers.map(p=>`<p class="source-pointer">${esc(refs.document.split('/').pop())} · ${esc(p)}</p>`).join(''):''}</details>`;}).join('');
  }
  function constraint(c,paper,status=''){
-  return `<div class="entry">${tag(c.constraint_id)}${status?tag(status,status==='Held'):''}<p>${esc(c.statement||'')}</p>${c.expression?`<div class="formula" aria-label="Source mathematical expression">${esc(c.expression)}</div>`:''}${fields({'Form':c.kind,'Formalization':c.formalization_origin,'Variable references':c.variable_refs,'Parameter references':c.parameter_refs})}${evidence(paper,c.evidence||[])}</div>`;
+  return `<div class="entry">${tag(c.constraint_id)}<p>${esc(c.statement||'')}</p>${c.expression?`<div class="formula" aria-label="Source mathematical expression">${esc(c.expression)}</div>`:''}${fields({'Form':c.kind,'Variable references':c.variable_refs,'Parameter references':c.parameter_refs})}${evidence(paper,c.evidence||[])}</div>`;
  }
  async function showFamily(id){
   const f=await rec('functional_groups',id);show(tag('Functional group')+tag(f.code)+tag(f.layer)+`<h2>Existing functional children</h2><p>${esc(f.definition)}</p><p>This group provides context for the current nodes below. It adds no node or relation to the global graph.</p>`+links(f.child_ids));
@@ -145,14 +154,13 @@
   const incident=projection.edges.filter(e=>e.highlighted&&(e.source===id||e.target===id));
   html+='<h3>Incoming and outgoing S edges</h3><div class="clickable-list">'+incident.map(e=>button('edge',e.id,code(e.source)+' → '+code(e.target))).join('')+'</div>';
   if(n.functional.is_child){const f=g.functional_groups.find(f=>f.id===n.functional.baseline_parent_id);html+=`<section class="mapping-panel"><h3>Functional child · ${esc(n.functional.baseline_parent_code)}</h3>${button('family',f.id,'Open functional group')}${links(f.child_ids)}<p>These are the current members of this existing functional group.</p></section>`;}
-  if(n.functional.subdivision_pending)html+='<p class="notice">Further functional subdivision remains unresolved. The current source definitions and memberships are retained.</p>';
   html+=raw('Definition: object, inputs, operation and boundary',n.semantic_definition);
   if(n.source_parent_definition)html+=raw('Additional source-based definition',n.source_parent_definition);
   if(n.functional.category?.definition_zh)html+=`<details><summary>Functional category and scope</summary><p>${esc(n.functional.category.definition_zh)}</p>${raw('Inclusion conditions',n.functional.category.inclusion_criteria)}${raw('Exclusion conditions',n.functional.category.exclusion_criteria)}</details>`;
   html+='<h3>Source definitions and mathematics</h3><p>Each card retains its own paper, mechanism, scope and variables. A formula is not automatically valid for every member of this node.</p>';
   for(const u of n.source_units){
    const definitions=n.source_definitions.filter(d=>d.unit_id===u.unit_id),variants=n.source_variants.filter(d=>d.unit_id===u.unit_id);
-   html+=`<details class="source-unit"><summary>${esc(papers.get(u.paper_id)?.number+' · '+u.function+' · '+u.mechanism_id)}</summary>`;
+   html+=`<details class="source-unit"><summary>${esc(papers.get(u.paper_id)?.number+' · '+u.function+' · '+u.mechanism_id)}</summary>`+paperReference(u.paper_id);
    for(const d of definitions)html+=`<p>${esc(d.target_definition)}</p>${raw('Identity and source-specific variants',{identity:d.identity_fields,variants:d.variation_fields})}`;
    for(const v of variants)html+=`${v.source_definition?`<p>${esc(v.source_definition)}</p>`:''}${raw('Retained source conditions and variants',v.retained_variants||[])}`;
    for(const c of u.constraints||[])html+=constraint(c,u.paper_id);
@@ -165,17 +173,17 @@
  }
  async function assertionCard(a){
   const accepted=new Set(a.accepted_constraint_ids||[]),held=new Set(a.held_constraint_ids||[]),science=a.source_science||{};
-  let html=tag(a.active?'Active S assertion':'Quarantined assertion',!a.active)+tag(papers.get(a.paper).number)+tag(a.semantic_review_status)+`<p>${button('rule',a.rule_ref,a.rule_id)}</p>`;
+  let html=tag('Source relation')+tag(papers.get(a.paper).number)+paperReference(a.paper)+`<p>${button('rule',a.rule_ref,a.rule_id)}</p>`;
   html+=fields({'Source occurrence':a.source_occurrence_id,'Target occurrence':a.target_occurrence_id,'Original endpoints':a.record.source+' → '+a.record.target});
   html+=raw('Scope and applicability',a.omega);
   if(science.source_definition||science.target_definition)html+=raw('Source-specific endpoint definitions',{'Source':science.source_definition,'Target':science.target_definition});
   for(const c of science.constraints||[])html+=constraint(c,a.paper,accepted.has(c.constraint_id)?'Accepted within source scope':held.has(c.constraint_id)?'Held':'Source statement');
-  html+=evidence(a.paper,science.evidence||[])+raw('Accepted and held constraint references',{accepted:a.accepted_constraint_ids,held:a.held_constraint_ids});
+  html+=evidence(a.paper,science.evidence||[])+raw('Relation-specific constraint references',a.accepted_constraint_ids||[]);
   const sourceRule=await rec('rules',a.rule_ref);
   const [sn,tn]=await Promise.all([rec('nodes',a.source),rec('nodes',a.target)]);
   const endpoint=(n,uid)=>n.source_definitions.filter(d=>d.unit_id===uid).map(d=>d.target_definition);
   html+=raw('Definitions from exact endpoint units',{'Source':endpoint(sn,a.source_unit_id),'Target':endpoint(tn,a.target_unit_id)});
-  html+=`<details><summary>Source rule context: meaning, formulas and units</summary><p>${esc(sourceRule.record.market_meaning)}</p><p>These expressions belong to the source rule. Only explicitly accepted references above are attributed to this assertion.</p>`;
+  html+=`<details><summary>Source rule context: meaning, formulas and units</summary><p>${esc(sourceRule.record.market_meaning)}</p><p>These expressions provide the wider source-rule context. Relation-specific constraint references are listed above.</p>`;
   for(const c of sourceRule.record.phi||[])html+=constraint(c,a.paper);
   html+=raw('Source rule variables and units',sourceRule.record.x)+raw('Source rule parameters and units',sourceRule.record.theta)+'</details>';
   html+=sourceRecord('rules',a.rule_ref);return html;
@@ -189,12 +197,12 @@
  async function showAssertion(id){const a=await rec('source_edge_archive',id);show(`<h2>${esc(code(a.source))} → ${esc(code(a.target))}</h2>`+links([a.source,a.target])+await assertionCard(a));}
  async function showRule(id){
   const item=await rec('rules',id),r=item.record,c=g.chains.find(x=>x.id===id);
-  let html=tag(papers.get(item.paper).number)+tag(c.status,c.status!=='visible')+`<h2>${esc(r.name)}</h2><p>${esc(r.market_meaning)}</p>`+sourceRecord('rules',id);
+  let html=tag(papers.get(item.paper).number)+`<h2>${esc(r.name)}</h2><p>${esc(r.market_meaning)}</p>`+sourceRecord('rules',id);
   if(c.visible)html+=button('chain',id,'Open current-node slice');else html+='<p class="notice">The original rule is preserved. Its chain display is cancelled because its original nodes map to one current node.</p>';
   html+=links(c.node_ids)+raw('Scope and applicability',r.omega)+'<h3>Constraints and formulas</h3>';
   for(const c of r.phi||[])html+=constraint(c,item.paper);
-  html+=raw('Variables and units',r.x)+raw('Parameters and units',r.theta)+'<h3>Source evidence</h3>'+evidence(item.paper,r.pi||[]);
-  html+=raw('Source field notes and unresolved references',{notes:r.field_notes,quarantined_references:r.quarantined_references});show(html);
+  html+=raw('Variables and units',r.x)+raw('Parameters and units',r.theta)+'<h3>Source evidence</h3>'+evidence(item.paper,r.pi||[])+raw('Source notes',r.field_notes);
+  show(html);
  }
  async function showSlice(s,view){
   let html=tag(view==='chain'?'Rule-Chain':'Rule-Cluster')+tag(papers.get(s.paper).number)+`<h2>${esc(s.title)}</h2><p class="code">${esc(s.id)}</p>`;
@@ -202,10 +210,9 @@
    const r=await rec('rules',s.id);html+=`<p>${esc(r.record.market_meaning)}</p>`;
    if(s.status==='original_singleton')html+='<p class="notice">This source rule originally contained one node and remains available as a single-node rule.</p>';
    html+=button('rule',s.id,'Definitions, formulas and evidence')+sourceRecord('rules',s.id)+links(s.node_ids)+raw('Exact occurrence mapping',s.occurrence_mappings);
-   if(s.quarantined_assertion_ids.length)html+='<h3>Quarantined source assertions</h3>'+s.quarantined_assertion_ids.map(a=>button('assertion',a,a.split('::').pop())).join('');
   }else{
    const c=await rec('clusters',s.id),r=c.record;html+=`<p>${esc(r.market_meaning)}</p>`+sourceRecord('clusters',s.id);
-   html+=raw('Cluster scope',{disposition:r.scope_disposition,explanation:r.scope_explanation,status:r.assembly_status,boundary:r.boundary_rationale});
+   html+=raw('Scope and applicability',r.scope_explanation)+raw('Cluster boundary',r.boundary_rationale);
    html+='<h3>Source Rule-Chains</h3>'+links(s.visible_rule_refs,'chain');
    if(s.suppressed_rule_refs.length)html+='<h3>Preserved rules without a chain display</h3>'+s.suppressed_rule_refs.map(x=>button('rule',x.id,x.id.split('::').pop())).join('');
    html+=raw('Chain ownership and roles',r.chain_bindings)+raw('D interfaces — annotations, not additional S edges',s.interface_annotations)+raw('Source object correspondences',r.object_mappings)+raw('Source gaps and unresolved references',{gaps:r.gaps,unresolved:s.unresolved_rule_refs});
